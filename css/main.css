@@ -43,7 +43,7 @@ hr {
     display: block;
     height: 1px;
     border: 0;
-    border-top: 1px solid #333;
+    border-top: 1px solid #999;
     margin: 1rem 0;
     padding: 0;
 }
@@ -220,7 +220,7 @@ ul {
 
 .highlight {
     background: 0 0;
-    background-color: #FAFAFA;
+    background-color: #333;
 }
 
 .wrapper {
@@ -273,7 +273,7 @@ ul {
 }
 
 .header nav {
-    border-top: 1px solid #333;
+    border-top: 1px solid #999;
     padding-top: 15px;
 }
 
@@ -405,8 +405,8 @@ ul {
 .footer {
     text-align: right;
     font-size: 0.75em;
-    color: #999;
-    border-top: 1px solid #333;
+    color: #333;
+    border-top: 1px solid #999;
     margin-top: 40px;
     padding: 15px 0;
 }
